@@ -1,1 +1,16 @@
-from flask import Flask, request\n\napp = Flask(__name__)\n\n@app.route('/getwork', methods=['GET'])\ndef get_work():\n    # TODO: Implement task generation and code blob creation\n    return 'This will be the getwork endpoint.'\n\n@app.route('/submit', methods=['POST'])\ndef submit_work():\n    # TODO: Implement work submission handling\n    return 'This will be the submit endpoint.'\n\nif __name__ == '__main__':\n    app.run(debug=True)
+from flask import Flask, request
+
+app = Flask(__name__)
+
+@app.route('/getwork', methods=['GET'])
+def get_work():
+    # TODO: Implement task generation and code blob creation
+    return 'This will be the getwork endpoint.'
+
+@app.route('/submit', methods=['POST'])
+def submit_work():
+    # TODO: Implement work submission handling
+    return 'This will be the submit endpoint.'
+
+if __name__ == '__main__':
+    app.run(debug=True)
