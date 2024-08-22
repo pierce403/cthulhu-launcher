@@ -1,10 +1,10 @@
 # Import necessary modules from Flask and other libraries
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 import os
 from openai import OpenAI
 
 # Initialize the Flask application
-app = Flask(__name__)
+app = Flask(__name__, static_folder='frontend/build')
 
 # Set up OpenAI client
 client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
@@ -93,6 +93,15 @@ def chat():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# Serve React App
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    if path != "" and os.path.exists(app.static_folder + '/' + path):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, 'index.html')
 
 # Run the Flask application if this script is executed directly
 if __name__ == '__main__':
