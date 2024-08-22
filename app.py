@@ -1,13 +1,13 @@
 # Import necessary modules from Flask and other libraries
 from flask import Flask, request, jsonify
 import os
-import openai
+from openai import OpenAI
 
 # Initialize the Flask application
 app = Flask(__name__)
 
-# Set up OpenAI API key
-openai.api_key = os.environ.get('OPENAI_API_KEY')
+# Set up OpenAI client
+client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
 
 # Define the route for the 'getwork' endpoint
 @app.route('/getwork', methods=['GET'])
@@ -59,18 +59,35 @@ def chat():
         if not message:
             return jsonify({'error': 'No message provided'}), 400
 
-        # Send the message to the OpenAI API
-        response = openai.Completion.create(
-            engine="text-davinci-002",
-            prompt=f"Human: {message}\nAI:",
-            max_tokens=150,
-            n=1,
-            stop=None,
-            temperature=0.7,
+        # Create a new thread
+        thread = client.beta.threads.create()
+
+        # Add a message to the thread
+        client.beta.threads.messages.create(
+            thread_id=thread.id,
+            role="user",
+            content=message
         )
 
-        # Extract the AI's reply from the response
-        ai_reply = response.choices[0].text.strip()
+        # Run the assistant
+        run = client.beta.threads.runs.create(
+            thread_id=thread.id,
+            assistant_id="asst_abc123",  # Replace with your actual assistant ID
+            instructions="Please provide a helpful response."
+        )
+
+        # Wait for the run to complete
+        while run.status != "completed":
+            run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+
+        # Retrieve the assistant's messages
+        messages = client.beta.threads.messages.list(thread_id=thread.id)
+
+        # Extract the assistant's reply
+        ai_reply = next((msg.content[0].text.value for msg in messages if msg.role == "assistant"), None)
+
+        if ai_reply is None:
+            return jsonify({'error': 'No response from assistant'}), 500
 
         return jsonify({'message': ai_reply})
 

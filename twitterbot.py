@@ -1,7 +1,7 @@
 import os
 import time
 import tweepy
-import openai
+from openai import OpenAI
 import requests
 from io import BytesIO
 from PIL import Image
@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 # Load API keys from environment variables
 # These keys are essential for authenticating with the OpenAI and Twitter APIs
-openai.api_key = os.getenv('OPENAI_API_KEY')
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 twitter_client_id = os.getenv('TWITTER_CLIENT_ID')
 twitter_client_secret = os.getenv('TWITTER_CLIENT_SECRET')
 
@@ -33,14 +33,43 @@ def generate_image():
     Generate an interesting image using OpenAI's DALL-E.
 
     This function sends a prompt to the DALL-E API and retrieves a URL
-    for the generated image.
+    for the generated image using the new threads API.
 
     Returns:
         str: URL of the generated image
     """
     prompt = "An abstract, colorful representation of artificial intelligence and creativity"
-    response = openai.Image.create(prompt=prompt, n=1, size="1024x1024")
-    image_url = response['data'][0]['url']
+
+    # Create a new thread
+    thread = client.beta.threads.create()
+
+    # Add a message to the thread
+    client.beta.threads.messages.create(
+        thread_id=thread.id,
+        role="user",
+        content=f"Generate an image with the following prompt: {prompt}"
+    )
+
+    # Run the assistant
+    run = client.beta.threads.runs.create(
+        thread_id=thread.id,
+        assistant_id="asst_your_image_assistant_id_here",  # Replace with your actual image generation assistant ID
+        instructions="Generate an image based on the given prompt."
+    )
+
+    # Wait for the run to complete
+    while run.status != "completed":
+        run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+
+    # Retrieve the assistant's messages
+    messages = client.beta.threads.messages.list(thread_id=thread.id)
+
+    # Extract the image URL from the assistant's reply
+    image_url = next((msg.content[0].image_file.file_id for msg in messages if msg.role == "assistant" and msg.content[0].type == "image_file"), None)
+
+    if image_url is None:
+        raise Exception("No image was generated")
+
     return image_url
 
 def post_image_to_twitter(image_url):
@@ -78,7 +107,7 @@ def respond_to_messages():
     Respond to user messages (mentions) on Twitter.
 
     This function retrieves recent mentions, checks if we've already
-    replied to them, generates a response using GPT-3 if we haven't,
+    replied to them, generates a response using the OpenAI assistant if we haven't,
     and posts the reply.
     """
     # Get recent messages (mentions)
@@ -87,21 +116,42 @@ def respond_to_messages():
     for mention in mentions.data:
         # Check if we've already replied to this mention
         if not has_replied(mention.id):
-            # Generate a response using OpenAI's GPT
-            response = openai.Completion.create(
-                engine="text-davinci-002",
-                prompt=f"Respond to this tweet: {mention.text}",
-                max_tokens=60
+            # Create a new thread
+            thread = client.beta.threads.create()
+
+            # Add the mention to the thread
+            client.beta.threads.messages.create(
+                thread_id=thread.id,
+                role="user",
+                content=f"Respond to this tweet: {mention.text}"
             )
 
-            # Reply to the mention
-            client.create_tweet(
-                text=response.choices[0].text.strip(),
-                in_reply_to_tweet_id=mention.id
+            # Run the assistant
+            run = client.beta.threads.runs.create(
+                thread_id=thread.id,
+                assistant_id="asst_your_assistant_id_here",  # Replace with your actual assistant ID
+                instructions="Please provide a concise and engaging response to the tweet."
             )
 
-            # Mark as replied
-            mark_as_replied(mention.id)
+            # Wait for the run to complete
+            while run.status != "completed":
+                run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+
+            # Retrieve the assistant's messages
+            messages = client.beta.threads.messages.list(thread_id=thread.id)
+
+            # Extract the assistant's reply
+            ai_reply = next((msg.content[0].text.value for msg in messages if msg.role == "assistant"), None)
+
+            if ai_reply:
+                # Reply to the mention
+                client.create_tweet(
+                    text=ai_reply[:280],  # Truncate to Twitter's character limit
+                    in_reply_to_tweet_id=mention.id
+                )
+
+                # Mark as replied
+                mark_as_replied(mention.id)
 
 def has_replied(tweet_id):
     """
