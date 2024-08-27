@@ -4,7 +4,7 @@ import os
 from openai import OpenAI
 
 # Initialize the Flask application
-app = Flask(__name__, static_folder='frontend/build')
+#app = Flask(__name__, static_folder='frontend/build')
 
 # Set up OpenAI client
 client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
