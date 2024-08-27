@@ -19,12 +19,6 @@ source venv/bin/activate
 # Install the required dependencies
 pip install -r requirements.txt
 
-# Navigate to the frontend directory and build the React app
-cd frontend
-npm install
-npm run build
-cd ..
-
 # Run the Flask app
 export FLASK_APP=app.py
 flask run

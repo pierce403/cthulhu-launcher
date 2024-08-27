@@ -23,20 +23,20 @@ function App() {
     setChatHistory((prev) => [...prev, { sender: "User", message: input }]);
 
     // TODO: Send message to backend API
-    // const response = await fetch('/api/chat', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ message: input }),
-    // });
-    // const data = await response.json();
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: input }),
+    });
+    const data = await response.json();
 
-    // Simulate Cthulhu bot response (replace with actual API call later)
-    setTimeout(() => {
-      setChatHistory((prev) => [
-        ...prev,
-        { sender: "Cthulhu", message: "Ph'nglui mglw'nafh Cthulhu R'lyeh wgah'nagl fhtagn." },
-      ]);
-    }, 1000);
+    // // Simulate Cthulhu bot response (replace with actual API call later)
+    // setTimeout(() => {
+    //   setChatHistory((prev) => [
+    //     ...prev,
+    //     { sender: "Cthulhu", message: "Ph'nglui mglw'nafh Cthulhu R'lyeh wgah'nagl fhtagn." },
+    //   ]);
+    // }, 1000);
 
     setInput("");
   };
