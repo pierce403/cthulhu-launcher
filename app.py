@@ -4,6 +4,7 @@ import os
 from openai import OpenAI
 
 # Initialize the Flask application
+app = Flask(__name__)
 #app = Flask(__name__, static_folder='frontend/build')
 
 # Set up OpenAI client
