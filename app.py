@@ -72,8 +72,8 @@ def chat():
         # Run the assistant
         run = client.beta.threads.runs.create(
             thread_id=thread.id,
-            assistant_id="asst_abc123",  # Replace with your actual assistant ID
-            instructions="Please provide a helpful response."
+            assistant_id="asst_C1QfXGVcUf2Vb36DZjqU1Ayb",  # Replace with your actual assistant ID
+            #instructions="Please provide a helpful response."
         )
 
         # Wait for the run to complete
@@ -92,7 +92,10 @@ def chat():
         return jsonify({'message': ai_reply})
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        #return jsonify({'error': str(e)}), 500
+        # print the error to the console
+        print('Error: ' + str(e))
+        return jsonify({'message': 'Error: ' + str(e)})
 
 # Serve React App
 @app.route('/', defaults={'path': ''})

@@ -30,6 +30,10 @@ function App() {
     });
     const data = await response.json();
 
+    // Add Cthulhu bot message to chat history
+    setChatHistory((prev) => [...prev, { sender: "Cthulhu", message: data.message }]);
+
+    console.log(data);
     // // Simulate Cthulhu bot response (replace with actual API call later)
     // setTimeout(() => {
     //   setChatHistory((prev) => [
