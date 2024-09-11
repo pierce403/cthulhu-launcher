@@ -1,5 +1,6 @@
 import pytest
-from app import app, db, User, Conversation, Message
+import io
+from app import app, db, User, Conversation, Message, UserFiles
 from unittest.mock import patch, MagicMock
 from sqlalchemy.exc import IntegrityError
 
@@ -180,3 +181,74 @@ def test_chat_endpoint(mock_client, test_client, init_database):
     assert 'conversation_id' in data
 
 # Add more tests as needed for other functions and edge cases
+
+@pytest.fixture
+def mock_s3_client():
+    with patch('app.s3') as mock_s3:
+        yield mock_s3
+
+def test_upload_file_success(test_client, init_database, mock_s3_client):
+    # Create a test user
+    user = User(user_id='test_user')
+    db.session.add(user)
+    db.session.commit()
+
+    # Mock file and form data
+    file_content = b'Test file content'
+    file = io.BytesIO(file_content)
+    data = {
+        'file': (file, 'test_file.txt'),
+        'user_id': 'test_user'
+    }
+
+    # Mock S3 upload
+    mock_s3_client.upload_fileobj.return_value = None
+
+    # Test file upload
+    response = test_client.post('/upload', data=data, content_type='multipart/form-data')
+    assert response.status_code == 200
+    assert 'File uploaded successfully' in response.get_json()['message']
+
+    # Check database entry
+    uploaded_file = UserFiles.query.filter_by(user_id='test_user', filename='test_file.txt').first()
+    assert uploaded_file is not None
+    assert uploaded_file.s3_key == 'user_files/test_user/test_file.txt'
+
+def test_upload_file_no_file(test_client):
+    response = test_client.post('/upload', data={}, content_type='multipart/form-data')
+    assert response.status_code == 400
+    assert 'No file part' in response.get_json()['error']
+
+def test_upload_file_no_user_id(test_client):
+    data = {
+        'file': (io.BytesIO(b'Test content'), 'test.txt'),
+    }
+    response = test_client.post('/upload', data=data, content_type='multipart/form-data')
+    assert response.status_code == 400
+    assert 'User ID is required' in response.get_json()['error']
+
+def test_upload_file_s3_error(test_client, init_database, mock_s3_client):
+    # Create a test user
+    user = User(user_id='test_user')
+    db.session.add(user)
+    db.session.commit()
+
+    # Mock file and form data
+    file_content = b'Test file content'
+    file = io.BytesIO(file_content)
+    data = {
+        'file': (file, 'test_file.txt'),
+        'user_id': 'test_user'
+    }
+
+    # Mock S3 upload error
+    mock_s3_client.upload_fileobj.side_effect = Exception('S3 upload failed')
+
+    # Test file upload with S3 error
+    response = test_client.post('/upload', data=data, content_type='multipart/form-data')
+    assert response.status_code == 500
+    assert 'S3 upload failed' in response.get_json()['error']
+
+    # Check that no database entry was created
+    uploaded_file = UserFiles.query.filter_by(user_id='test_user', filename='test_file.txt').first()
+    assert uploaded_file is None

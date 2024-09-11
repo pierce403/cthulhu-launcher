@@ -6,6 +6,8 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from config import SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS
 from datetime import datetime
+import boto3
+from werkzeug.utils import secure_filename
 
 # Initialize the Flask application
 #app = Flask(__name__)
@@ -42,6 +44,14 @@ class Message(db.Model):
     conversation_id = db.Column(db.String, db.ForeignKey('conversation.conversation_id'), nullable=False)
     content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+# Define UserFiles model
+class UserFiles(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String, db.ForeignKey('user.user_id'), nullable=False)
+    filename = db.Column(db.String, nullable=False)
+    s3_key = db.Column(db.String, nullable=False)
+    upload_date = db.Column(db.DateTime, default=datetime.utcnow)
 
 # Helper functions for user operations
 def get_user(user_id):
@@ -243,3 +253,41 @@ def serve(path):
 if __name__ == '__main__':
     # Start the Flask development server with debug mode enabled
     app.run(debug=True)
+
+# Initialize S3 client
+s3 = boto3.client('s3',
+    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+    region_name=os.environ.get('AWS_REGION')
+)
+
+# File upload route
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    if file:
+        filename = secure_filename(file.filename)
+        user_id = request.form.get('user_id')
+        if not user_id:
+            return jsonify({'error': 'User ID is required'}), 400
+
+        # Generate a unique S3 key
+        s3_key = f"user_files/{user_id}/{filename}"
+
+        try:
+            # Upload file to S3
+            s3.upload_fileobj(file, os.environ.get('S3_BUCKET_NAME'), s3_key)
+
+            # Save file metadata to database
+            new_file = UserFiles(user_id=user_id, filename=filename, s3_key=s3_key)
+            db.session.add(new_file)
+            db.session.commit()
+
+            return jsonify({'message': 'File uploaded successfully', 'filename': filename}), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
