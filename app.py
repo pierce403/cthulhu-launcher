@@ -2,11 +2,97 @@
 from flask import Flask, request, jsonify, send_from_directory
 import os
 from openai import OpenAI
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from config import SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS
+from datetime import datetime
 
 # Initialize the Flask application
 #app = Flask(__name__)
 #app = Flask(__name__, static_folder='frontend/build')
 app = Flask(__name__, static_folder='static')
+
+# Configure the app with SQLAlchemy settings
+app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = SQLALCHEMY_TRACK_MODIFICATIONS
+
+# Initialize SQLAlchemy
+db = SQLAlchemy(app)
+
+# Initialize Flask-Migrate
+migrate = Migrate(app, db)
+
+# Define User model
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String, unique=True, nullable=False)
+    important_notes = db.Column(db.Text)
+    preferences = db.Column(db.JSON)
+
+# Define Conversation model
+class Conversation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.String, unique=True, nullable=False)
+    user_id = db.Column(db.String, db.ForeignKey('user.user_id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+# Define Message model
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.String, db.ForeignKey('conversation.conversation_id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+# Helper functions for user operations
+def get_user(user_id):
+    """
+    Retrieve a user by user_id.
+    """
+    return User.query.filter_by(user_id=user_id).first()
+
+def create_user(user_id, important_notes="", preferences=None):
+    """
+    Create a new user.
+    """
+    user = User(user_id=user_id, important_notes=important_notes, preferences=preferences or {})
+    db.session.add(user)
+    db.session.commit()
+    return user
+
+# Helper functions for conversation operations
+def get_conversation(conversation_id):
+    """
+    Retrieve a full conversation by conversation_id, sorting messages by timestamp.
+    """
+    conversation = Conversation.query.filter_by(conversation_id=conversation_id).first()
+    if not conversation:
+        return None
+    messages = Message.query.filter_by(conversation_id=conversation_id).order_by(Message.timestamp).all()
+    return {
+        'conversation_id': conversation.conversation_id,
+        'user_id': conversation.user_id,
+        'created_at': conversation.created_at,
+        'messages': [{'content': msg.content, 'timestamp': msg.timestamp} for msg in messages]
+    }
+
+def create_conversation(user_id, conversation_id):
+    """
+    Create a new conversation.
+    """
+    conversation = Conversation(conversation_id=conversation_id, user_id=user_id)
+    db.session.add(conversation)
+    db.session.commit()
+    return conversation
+
+# Helper functions for message operations
+def add_message(conversation_id, content):
+    """
+    Add a new message to a conversation.
+    """
+    message = Message(conversation_id=conversation_id, content=content)
+    db.session.add(message)
+    db.session.commit()
+    return message
 
 # Set up OpenAI client
 client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
@@ -54,50 +140,95 @@ def chat():
         JSON: The response from the OpenAI API
     """
     try:
-        # Get the message from the request
+        # Get the message, user_id, and conversation_id from the request
         data = request.json
         message = data.get('message')
+        user_id = data.get('user_id')
+        conversation_id = data.get('conversation_id')
 
-        if not message:
-            return jsonify({'error': 'No message provided'}), 400
+        if not message or not user_id:
+            return jsonify({'error': 'No message or user_id provided'}), 400
 
-        # Create a new thread
-        thread = client.beta.threads.create()
+        # Get user data
+        user = get_user(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
 
-        # Add a message to the thread
-        client.beta.threads.messages.create(
-            thread_id=thread.id,
-            role="user",
-            content=message
-        )
+        # Prepare user context
+        user_context = prepare_user_context(user)
 
-        # Run the assistant
-        run = client.beta.threads.runs.create(
-            thread_id=thread.id,
-            assistant_id="asst_C1QfXGVcUf2Vb36DZjqU1Ayb",  # Replace with your actual assistant ID
-            #instructions="Please provide a helpful response."
-        )
+        # Retrieve previous conversation context if conversation_id is provided
+        conversation_context = get_conversation_context(conversation_id) if conversation_id else ""
 
-        # Wait for the run to complete
-        while run.status != "completed":
-            run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+        # Create or retrieve OpenAI thread
+        thread = create_or_retrieve_thread(conversation_id)
 
-        # Retrieve the assistant's messages
-        messages = client.beta.threads.messages.list(thread_id=thread.id)
+        # Add message to OpenAI thread
+        add_message_to_thread(thread.id, user_context, conversation_context, message)
 
-        # Extract the assistant's reply
-        ai_reply = next((msg.content[0].text.value for msg in messages if msg.role == "assistant"), None)
+        # Run the assistant and get reply
+        ai_reply = run_assistant(thread.id)
 
         if ai_reply is None:
             return jsonify({'error': 'No response from assistant'}), 500
 
-        return jsonify({'message': ai_reply})
+        # Save or update the conversation and messages in the database
+        conversation_id = save_conversation_and_messages(user_id, conversation_id, message, ai_reply, thread.id)
+
+        return jsonify({'message': ai_reply, 'conversation_id': conversation_id})
 
     except Exception as e:
-        #return jsonify({'error': str(e)}), 500
-        # print the error to the console
         print('Error: ' + str(e))
         return jsonify({'message': 'Error: ' + str(e)})
+
+def get_user(user_id):
+    return User.query.filter_by(user_id=user_id).first()
+
+def prepare_user_context(user):
+    return f"Important notes: {user.important_notes}\nPreferences: {user.preferences}"
+
+def get_conversation_context(conversation_id):
+    previous_messages = Message.query.filter_by(conversation_id=conversation_id).order_by(Message.timestamp).all()
+    return "\n".join([f"{'User' if i%2==0 else 'AI'}: {msg.content}" for i, msg in enumerate(previous_messages)])
+
+def create_or_retrieve_thread(conversation_id):
+    return client.beta.threads.create() if not conversation_id else client.beta.threads.retrieve(conversation_id)
+
+def add_message_to_thread(thread_id, user_context, conversation_context, message):
+    client.beta.threads.messages.create(
+        thread_id=thread_id,
+        role="user",
+        content=f"{user_context}\n\nPrevious conversation:\n{conversation_context}\n\nUser message: {message}"
+    )
+
+def run_assistant(thread_id):
+    run = client.beta.threads.runs.create(
+        thread_id=thread_id,
+        assistant_id="asst_C1QfXGVcUf2Vb36DZjqU1Ayb",  # Replace with your actual assistant ID
+        instructions="Consider the user's important notes, preferences, and previous conversation when responding."
+    )
+
+    while run.status != "completed":
+        run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
+
+    messages = client.beta.threads.messages.list(thread_id=thread_id)
+    return next((msg.content[0].text.value for msg in messages if msg.role == "assistant"), None)
+
+def save_conversation_and_messages(user_id, conversation_id, user_message, ai_reply, thread_id):
+    if not conversation_id:
+        new_conversation = Conversation(conversation_id=str(thread_id), user_id=user_id)
+        db.session.add(new_conversation)
+        db.session.flush()  # Flush to get the new conversation ID
+        conversation_id = new_conversation.conversation_id
+
+    new_message = Message(conversation_id=conversation_id, content=user_message)
+    db.session.add(new_message)
+
+    ai_message = Message(conversation_id=conversation_id, content=ai_reply)
+    db.session.add(ai_message)
+
+    db.session.commit()
+    return conversation_id
 
 # Serve React App
 @app.route('/', defaults={'path': ''})

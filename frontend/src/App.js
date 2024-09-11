@@ -15,6 +15,8 @@ import { customTheme } from "./theme";
 function App() {
   const [input, setInput] = useState("");
   const [chatHistory, setChatHistory] = useState([]);
+  const [userId, setUserId] = useState("user123"); // Temporary user ID
+  const [conversationId, setConversationId] = useState(null);
 
   const handleSendMessage = async () => {
     if (input.trim() === "") return;
@@ -22,25 +24,32 @@ function App() {
     // Add user message to chat history
     setChatHistory((prev) => [...prev, { sender: "User", message: input }]);
 
-    // TODO: Send message to backend API
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: input }),
-    });
-    const data = await response.json();
+    // Send message to backend API
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: input,
+          user_id: userId,
+          conversation_id: conversationId
+        }),
+      });
+      const data = await response.json();
 
-    // Add Cthulhu bot message to chat history
-    setChatHistory((prev) => [...prev, { sender: "Cthulhu", message: data.message }]);
+      // Add Cthulhu bot message to chat history
+      setChatHistory((prev) => [...prev, { sender: "Cthulhu", message: data.message }]);
 
-    console.log(data);
-    // // Simulate Cthulhu bot response (replace with actual API call later)
-    // setTimeout(() => {
-    //   setChatHistory((prev) => [
-    //     ...prev,
-    //     { sender: "Cthulhu", message: "Ph'nglui mglw'nafh Cthulhu R'lyeh wgah'nagl fhtagn." },
-    //   ]);
-    // }, 1000);
+      // Update conversation_id if it's a new conversation
+      if (data.conversation_id && !conversationId) {
+        setConversationId(data.conversation_id);
+      }
+
+      console.log(data);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      setChatHistory((prev) => [...prev, { sender: "System", message: "Error: Unable to send message" }]);
+    }
 
     setInput("");
   };

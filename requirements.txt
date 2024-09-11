@@ -2,3 +2,6 @@ Flask
 gunicorn
 openai
 Werkzeug
+psycopg2
+Flask-Migrate
+boto3
