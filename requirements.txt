@@ -2,6 +2,8 @@ Flask
 gunicorn
 openai
 Werkzeug
-psycopg2
+psycopg2-binary
 Flask-Migrate
 boto3
+python_dotenv
+

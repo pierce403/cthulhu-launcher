@@ -10,18 +10,17 @@ from werkzeug.utils import secure_filename
 # Initialize the Flask application
 #app = Flask(__name__)
 #app = Flask(__name__, static_folder='frontend/build')
-app = Flask(__name__, static_folder='static')
+app = Flask(__name__, static_folder='web')
+#app = Flask(__name__, static_folder='static')
 
 # Configure the app with SQLAlchemy settings
-app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
+# get the db URL from DATABASE_URL environment variable
+db_url = os.environ.get('DATABASE_URL')
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = SQLALCHEMY_TRACK_MODIFICATIONS
 
 # Initialize SQLAlchemy
 db = SQLAlchemy(app)
-
-# Create all database tables
-with app.app_context():
-    db.create_all()
 
 # Define User model
 class User(db.Model):
@@ -55,6 +54,16 @@ class File(db.Model):
     upload_date = db.Column(db.DateTime, default=datetime.utcnow)
     mime_type = db.Column(db.String, nullable=False)
     file_size = db.Column(db.Integer, nullable=False)
+    score = db.Column(db.Integer)
+
+# Create all database tables
+with app.app_context():
+    print("Creating all tables")
+    db.create_all()
+    # confirm that the tables were created
+    print(db.Model.metadata.tables.keys())
+    print("Tables created")
+
 
 # Helper functions for user operations
 def get_user(user_id):
@@ -165,7 +174,9 @@ def chat():
         # Get user data
         user = get_user(user_id)
         if not user:
-            return jsonify({'error': 'User not found'}), 404
+            # create user
+            create_user(user_id,"new user","none")
+            #return jsonify({'error': 'User not found'}), 404
 
         # Prepare user context
         user_context = prepare_user_context(user)
@@ -198,7 +209,7 @@ def get_user(user_id):
     return User.query.filter_by(user_id=user_id).first()
 
 def prepare_user_context(user):
-    return f"Important notes: {user.important_notes}\nPreferences: {user.preferences}"
+    return f"User's name: {user.user_id} Important notes: {user.important_notes}\nPreferences: {user.preferences}"
 
 def get_conversation_context(conversation_id):
     previous_messages = Message.query.filter_by(conversation_id=conversation_id).order_by(Message.timestamp).all()
@@ -218,7 +229,7 @@ def run_assistant(thread_id):
     run = client.beta.threads.runs.create(
         thread_id=thread_id,
         assistant_id="asst_C1QfXGVcUf2Vb36DZjqU1Ayb",  # Replace with your actual assistant ID
-        instructions="Consider the user's important notes, preferences, and previous conversation when responding."
+        instructions="You are the Dark Lord Cthulhu. Consider the user's important notes, preferences, and previous conversation when responding. Find out what their desires, and the find out how they can serve the dark mission."
     )
 
     while run.status != "completed":
@@ -283,7 +294,8 @@ def upload_file():
                 filename=filename,
                 file_content=file_content,
                 mime_type=mime_type,
-                file_size=file_size
+                file_size=file_size,
+                score=0,
             )
             db.session.add(new_file)
             db.session.commit()
