@@ -3,10 +3,8 @@ from flask import Flask, request, jsonify, send_from_directory
 import os
 from openai import OpenAI
 from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
 from config import SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS
 from datetime import datetime
-import boto3
 from werkzeug.utils import secure_filename
 
 # Initialize the Flask application
@@ -21,8 +19,9 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = SQLALCHEMY_TRACK_MODIFICATIONS
 # Initialize SQLAlchemy
 db = SQLAlchemy(app)
 
-# Initialize Flask-Migrate
-migrate = Migrate(app, db)
+# Create all database tables
+with app.app_context():
+    db.create_all()
 
 # Define User model
 class User(db.Model):
@@ -44,14 +43,18 @@ class Message(db.Model):
     conversation_id = db.Column(db.String, db.ForeignKey('conversation.conversation_id'), nullable=False)
     content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    file_id = db.Column(db.Integer, db.ForeignKey('file.id'), nullable=True)
+    file = db.relationship('File', backref=db.backref('messages', lazy=True))
 
-# Define UserFiles model
-class UserFiles(db.Model):
+# Define File model
+class File(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.String, db.ForeignKey('user.user_id'), nullable=False)
     filename = db.Column(db.String, nullable=False)
-    s3_key = db.Column(db.String, nullable=False)
+    file_content = db.Column(db.LargeBinary, nullable=False)  # BYTEA type for PostgreSQL
     upload_date = db.Column(db.DateTime, default=datetime.utcnow)
+    mime_type = db.Column(db.String, nullable=False)
+    file_size = db.Column(db.Integer, nullable=False)
 
 # Helper functions for user operations
 def get_user(user_id):
@@ -254,13 +257,6 @@ if __name__ == '__main__':
     # Start the Flask development server with debug mode enabled
     app.run(debug=True)
 
-# Initialize S3 client
-s3 = boto3.client('s3',
-    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-    region_name=os.environ.get('AWS_REGION')
-)
-
 # File upload route
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -276,18 +272,23 @@ def upload_file():
         if not user_id:
             return jsonify({'error': 'User ID is required'}), 400
 
-        # Generate a unique S3 key
-        s3_key = f"user_files/{user_id}/{filename}"
-
         try:
-            # Upload file to S3
-            s3.upload_fileobj(file, os.environ.get('S3_BUCKET_NAME'), s3_key)
+            file_content = file.read()
+            mime_type = file.content_type
+            file_size = len(file_content)
 
-            # Save file metadata to database
-            new_file = UserFiles(user_id=user_id, filename=filename, s3_key=s3_key)
+            # Save file metadata and content to database
+            new_file = File(
+                user_id=user_id,
+                filename=filename,
+                file_content=file_content,
+                mime_type=mime_type,
+                file_size=file_size
+            )
             db.session.add(new_file)
             db.session.commit()
 
             return jsonify({'message': 'File uploaded successfully', 'filename': filename}), 200
         except Exception as e:
+            db.session.rollback()
             return jsonify({'error': str(e)}), 500
