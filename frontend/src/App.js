@@ -13,11 +13,13 @@ import {
 } from "@chakra-ui/react";
 import { AttachmentIcon } from "@chakra-ui/icons";
 import { customTheme } from "./theme";
+import { generateEldritchName } from "./utils";
 
 function App() {
   const [input, setInput] = useState("");
   const [chatHistory, setChatHistory] = useState([]);
   const [userId, setUserId] = useState("");
+  const [generatedName, setGeneratedName] = useState("");
   const [conversationId, setConversationId] = useState(null);
   const [uploadedFile, setUploadedFile] = useState(null);
   const fileInputRef = useRef(null);
@@ -26,12 +28,24 @@ function App() {
     const storedUserId = localStorage.getItem("userId");
     if (storedUserId) {
       setUserId(storedUserId);
+    } else {
+      const generatedName = generateEldritchName();
+      setUserId(generatedName);
+      setGeneratedName(generatedName);
     }
   }, []);
 
   useEffect(() => {
     if (userId) {
       localStorage.setItem("userId", userId);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      const generatedName = generateEldritchName();
+      setUserId(generatedName);
+      setGeneratedName(generatedName);
     }
   }, [userId]);
 
@@ -114,13 +128,15 @@ function App() {
         <Input
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
-          placeholder="Enter your User ID"
+          placeholder={generatedName || "Enter your User ID"}
           mb={4}
           bg="green.900"
           color="green.100"
           borderColor="green.500"
           _placeholder={{ color: "green.500" }}
           _focus={{ borderColor: "green.300" }}
+          size="sm"
+          width="250px"
         />
         <VStack
           spacing={4}
@@ -194,3 +210,5 @@ function App() {
 }
 
 export default App;
+
+
