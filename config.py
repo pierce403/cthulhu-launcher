@@ -16,6 +16,8 @@ if not database_url:
 SQLALCHEMY_DATABASE_URI = database_url
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+
+
 # JSON serialization for SQLite (if needed)
 if database_url.startswith('sqlite'):
     from sqlalchemy.engine import Engine
