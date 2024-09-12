@@ -15,8 +15,8 @@ app = Flask(__name__, static_folder='web')
 
 # Configure the app with SQLAlchemy settings
 # get the db URL from DATABASE_URL environment variable
-db_url = os.environ.get('DATABASE_URL')
-app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+fronty, backy = os.environ['DATABASE_URL'].split(':',1)  
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql:'+backy
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = SQLALCHEMY_TRACK_MODIFICATIONS
 
 # Initialize SQLAlchemy
