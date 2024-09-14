@@ -22,18 +22,35 @@ function App() {
   const [generatedName, setGeneratedName] = useState("");
   const [conversationId, setConversationId] = useState(null);
   const [uploadedFile, setUploadedFile] = useState(null);
+  const [userScore, setUserScore] = useState(0);
+  const [userNotes, setUserNotes] = useState("");
+  const [updatedNotes, setUpdatedNotes] = useState("");
   const fileInputRef = useRef(null);
+  const chatContainerRef = useRef(null);
 
   useEffect(() => {
     const storedUserId = localStorage.getItem("userId");
+    const storedUserScore = localStorage.getItem("userScore");
+    console.log('Initial load - Stored User ID:', storedUserId);
+    console.log('Initial load - Stored User Score:', storedUserScore);
     if (storedUserId) {
       setUserId(storedUserId);
+      const parsedScore = parseInt(storedUserScore) || 0;
+      setUserScore(parsedScore);
+      console.log('Initial load - Setting User Score:', parsedScore);
     } else {
       const generatedName = generateEldritchName();
       setUserId(generatedName);
       setGeneratedName(generatedName);
+      setUserScore(0);
+      console.log('Initial load - New user, setting score to 0');
     }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("userScore", userScore.toString());
+    console.log('User score saved to localStorage:', userScore);
+  }, [userScore]);
 
   useEffect(() => {
     if (userId) {
@@ -49,8 +66,16 @@ function App() {
     }
   }, [userId]);
 
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatHistory]);
+
   const handleSendMessage = async () => {
     if (input.trim() === "" || !userId) return;
+
+    console.log('Sending message with current userScore:', userScore);
 
     // Add user message to chat history
     setChatHistory((prev) => [...prev, { sender: "User", message: input }]);
@@ -63,10 +88,13 @@ function App() {
         body: JSON.stringify({
           message: input,
           user_id: userId,
-          conversation_id: conversationId
+          conversation_id: conversationId,
+          user_score: userScore,
+          user_notes: userNotes
         }),
       });
       const data = await response.json();
+      console.log('Received response from backend:', data);
 
       // Add Cthulhu bot message to chat history
       setChatHistory((prev) => [...prev, { sender: "Cthulhu", message: data.message }]);
@@ -74,9 +102,20 @@ function App() {
       // Update conversation_id if it's a new conversation
       if (data.conversation_id && !conversationId) {
         setConversationId(data.conversation_id);
+        console.log('Updated conversation_id:', data.conversation_id);
       }
 
-      console.log(data);
+      // Update user score and notes
+      if (data.updated_score !== undefined) {
+        console.log('Updating user score from', userScore, 'to', data.updated_score);
+        setUserScore(data.updated_score);
+      }
+      if (data.updated_notes !== undefined) {
+        console.log('Updating user notes:', data.updated_notes);
+        setUpdatedNotes(data.updated_notes);
+      }
+
+      console.log('Final data after processing:', data);
     } catch (error) {
       console.error("Error sending message:", error);
       setChatHistory((prev) => [...prev, { sender: "System", message: "Error: Unable to send message" }]);
@@ -125,23 +164,57 @@ function App() {
         <Text fontSize="3xl" fontWeight="bold" mb={4} color="green.300" textAlign="center">
           Chat with Cthulhu
         </Text>
-        <Input
-          value={userId}
-          onChange={(e) => setUserId(e.target.value)}
-          placeholder={generatedName || "Enter your User ID"}
-          mb={4}
-          bg="green.900"
-          color="green.100"
-          borderColor="green.500"
-          _placeholder={{ color: "green.500" }}
-          _focus={{ borderColor: "green.300" }}
-          size="sm"
-          width="250px"
-        />
+        <Flex direction="column" mb={4}>
+          <Flex alignItems="center" mb={2}>
+            <Input
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              placeholder={generatedName || "Enter your User ID"}
+              bg="green.900"
+              color="green.100"
+              borderColor="green.500"
+              _placeholder={{ color: "green.500" }}
+              _focus={{ borderColor: "green.300" }}
+              size="sm"
+              width="250px"
+              mr={2}
+            />
+            <Box
+              bg="green.700"
+              p={2}
+              borderRadius="md"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+            >
+              <Text color="green.100" fontWeight="bold" fontSize="lg">
+                Score: {userScore}
+              </Text>
+            </Box>
+          </Flex>
+          <Input
+            value={userNotes}
+            onChange={(e) => setUserNotes(e.target.value)}
+            placeholder="Enter your notes..."
+            bg="green.900"
+            color="green.100"
+            borderColor="green.500"
+            _placeholder={{ color: "green.500" }}
+            _focus={{ borderColor: "green.300" }}
+            size="sm"
+            width="100%"
+          />
+        </Flex>
+        {updatedNotes && (
+          <Box mb={4} p={2} bg="green.700" borderRadius="md">
+            <Text color="green.100">Updated Notes: {updatedNotes}</Text>
+          </Box>
+        )}
         <VStack
+          ref={chatContainerRef}
           spacing={4}
           align="stretch"
-          height="calc(100vh - 300px)"
+          height="calc(100vh - 350px)"
           overflowY="auto"
           borderWidth={2}
           borderColor="green.500"
@@ -208,6 +281,8 @@ function App() {
     </ChakraProvider>
   );
 }
+
+
 
 export default App;
 
