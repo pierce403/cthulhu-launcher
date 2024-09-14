@@ -15,7 +15,9 @@ app = Flask(__name__, static_folder='web')
 
 # Configure the app with SQLAlchemy settings
 # get the db URL from DATABASE_URL environment variable
-fronty, backy = os.environ['DATABASE_URL'].split(':',1)  
+db_url = os.environ.get('DATABASE_URL')
+fronty, backy = os.environ['DATABASE_URL'].split(':',1)
+  
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql:'+backy
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = SQLALCHEMY_TRACK_MODIFICATIONS
 
@@ -68,9 +70,14 @@ with app.app_context():
 # Helper functions for user operations
 def get_user(user_id):
     """
-    Retrieve a user by user_id.
+    Retrieve or create a user by user_id.
     """
-    return User.query.filter_by(user_id=user_id).first()
+    user = User.query.filter_by(user_id=user_id).first()
+    if not user:
+        user = create_user(user_id)
+    return user
+
+    #return User.query.filter_by(user_id=user_id).first()
 
 def create_user(user_id, important_notes="", preferences=None):
     """
@@ -176,8 +183,10 @@ def chat():
         if not user:
             # create user
             create_user(user_id,"new user","none")
+            user = get_user(user_id)
             #return jsonify({'error': 'User not found'}), 404
 
+        
         # Prepare user context
         user_context = prepare_user_context(user)
 
