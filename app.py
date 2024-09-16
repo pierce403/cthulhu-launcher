@@ -16,8 +16,8 @@ load_dotenv()
 
 # Initialize the Flask application
 #app = Flask(__name__)
-#app = Flask(__name__, static_folder='frontend/build')
-app = Flask(__name__, static_folder='web')
+app = Flask(__name__, static_folder='frontend/build')
+#app = Flask(__name__, static_folder='web')
 #app = Flask(__name__, static_folder='static')
 
 # Configure the app with SQLAlchemy settings

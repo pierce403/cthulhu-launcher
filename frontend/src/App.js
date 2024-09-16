@@ -37,13 +37,15 @@ function App() {
       setUserId(storedUserId);
       const parsedScore = parseInt(storedUserScore) || 0;
       setUserScore(parsedScore);
+      console.log('Initial load - Setting User ID:', storedUserId);
       console.log('Initial load - Setting User Score:', parsedScore);
     } else {
       const generatedName = generateEldritchName();
       setUserId(generatedName);
       setGeneratedName(generatedName);
       setUserScore(0);
-      console.log('Initial load - New user, setting score to 0');
+      localStorage.setItem("userId", generatedName);
+      console.log('Initial load - New user, setting ID:', generatedName);
     }
   }, []);
 
@@ -55,6 +57,7 @@ function App() {
   useEffect(() => {
     if (userId) {
       localStorage.setItem("userId", userId);
+      console.log('User ID saved to localStorage:', userId);
     }
   }, [userId]);
 
@@ -157,132 +160,143 @@ function App() {
         margin="auto"
         p={4}
         bg="black"
-        backgroundImage="url('https://example.com/tentacle-background.jpg')"
-        backgroundSize="cover"
-        backgroundPosition="center"
+        position="relative"
+        _before={{
+          content: '""',
+          position: "absolute",
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          backgroundColor: "rgba(0,0,0,0.5)", // Adjust this value to control darkness
+          zIndex: 1
+        }}
       >
-        <Text fontSize="3xl" fontWeight="bold" mb={4} color="green.300" textAlign="center">
-          Chat with Cthulhu
-        </Text>
-        <Flex direction="column" mb={4}>
-          <Flex alignItems="center" mb={2}>
+        <Box
+          position="absolute"
+          top={0}
+          right={0}
+          bottom={0}
+          left={0}
+          backgroundImage="url('/tentacle-bg.png')"
+          backgroundSize="cover"
+          backgroundPosition="center"
+          opacity={0.7} // Adjust this value to control image opacity
+          zIndex={0}
+        />
+        <Box position="relative" zIndex={2}>
+          <Text fontSize="3xl" fontWeight="bold" mb={4} color="green.300" textAlign="center">
+            A̶̢̗͌N̷̬͕͋S̵͍͌̄W̴̧̤̋E̸͖̪͕̍͒͊R̶̭̎́ ̵̘͙̞̈́̓T̶̺̣͉͆H̴̖̐̃͝E̷͉̥͊ͅ ̴̢̤̣͛̌C̴̜̑Ą̷̡̋L̴̮͗̾̿L̵̛͔
+          </Text>
+          <Flex direction="column" mb={4}>
+            <Flex alignItems="center" mb={2}>
+              <Input
+                value={userId}
+                onChange={(e) => {
+                  setUserId(e.target.value);
+                  console.log('User ID changed:', e.target.value);
+                }}
+                placeholder={generatedName || "Enter your User ID"}
+                bg="green.900"
+                color="green.100"
+                borderColor="green.500"
+                _placeholder={{ color: "green.500" }}
+                _focus={{ borderColor: "green.300" }}
+                size="sm"
+                width="250px"
+                mr={2}
+              />
+              <Box
+                bg="green.700"
+                p={2}
+                borderRadius="md"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <Text color="green.100" fontWeight="bold" fontSize="lg">
+                  Score: {userScore}
+                </Text>
+              </Box>
+            </Flex>
+          </Flex>
+          {updatedNotes && (
+            <Box mb={4} p={2} bg="green.700" borderRadius="md">
+              <Text color="green.100">Updated Notes: {updatedNotes}</Text>
+            </Box>
+          )}
+          <VStack
+            ref={chatContainerRef}
+            spacing={4}
+            align="stretch"
+            height="calc(100vh - 350px)"
+            overflowY="auto"
+            borderWidth={2}
+            borderColor="green.500"
+            borderRadius="md"
+            p={4}
+            mb={4}
+            bg="rgba(0, 0, 0, 0.7)"
+          >
+            {chatHistory.map((chat, index) => (
+              <Box
+                key={index}
+                alignSelf={chat.sender === "User" ? "flex-end" : "flex-start"}
+                bg={chat.sender === "User" ? "green.700" : "green.900"}
+                p={3}
+                borderRadius="md"
+                maxWidth="80%"
+              >
+                <Text fontWeight="bold" color="green.300">{chat.sender}</Text>
+                <Text color="green.100">{chat.message}</Text>
+              </Box>
+            ))}
+          </VStack>
+          {uploadedFile && (
+            <Box mb={4} p={2} bg="green.700" borderRadius="md">
+              <Text color="green.100">Uploaded: {uploadedFile}</Text>
+            </Box>
+          )}
+          <HStack>
             <Input
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              placeholder={generatedName || "Enter your User ID"}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Type your message..."
+              onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
               bg="green.900"
               color="green.100"
               borderColor="green.500"
               _placeholder={{ color: "green.500" }}
               _focus={{ borderColor: "green.300" }}
-              size="sm"
-              width="250px"
-              mr={2}
             />
-            <Box
+            <IconButton
+              icon={<AttachmentIcon />}
+              onClick={() => fileInputRef.current.click()}
+              aria-label="Attach file"
               bg="green.700"
-              p={2}
-              borderRadius="md"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
+              color="black"
+              _hover={{ bg: "green.600" }}
+            />
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: "none" }}
+              onChange={handleFileUpload}
+            />
+            <Button
+              onClick={handleSendMessage}
+              bg="green.700"
+              color="black"
+              _hover={{ bg: "green.600" }}
             >
-              <Text color="green.100" fontWeight="bold" fontSize="lg">
-                Score: {userScore}
-              </Text>
-            </Box>
-          </Flex>
-          <Input
-            value={userNotes}
-            onChange={(e) => setUserNotes(e.target.value)}
-            placeholder="Enter your notes..."
-            bg="green.900"
-            color="green.100"
-            borderColor="green.500"
-            _placeholder={{ color: "green.500" }}
-            _focus={{ borderColor: "green.300" }}
-            size="sm"
-            width="100%"
-          />
-        </Flex>
-        {updatedNotes && (
-          <Box mb={4} p={2} bg="green.700" borderRadius="md">
-            <Text color="green.100">Updated Notes: {updatedNotes}</Text>
-          </Box>
-        )}
-        <VStack
-          ref={chatContainerRef}
-          spacing={4}
-          align="stretch"
-          height="calc(100vh - 350px)"
-          overflowY="auto"
-          borderWidth={2}
-          borderColor="green.500"
-          borderRadius="md"
-          p={4}
-          mb={4}
-          bg="rgba(0, 0, 0, 0.7)"
-        >
-          {chatHistory.map((chat, index) => (
-            <Box
-              key={index}
-              alignSelf={chat.sender === "User" ? "flex-end" : "flex-start"}
-              bg={chat.sender === "User" ? "green.700" : "green.900"}
-              p={3}
-              borderRadius="md"
-              maxWidth="80%"
-            >
-              <Text fontWeight="bold" color="green.300">{chat.sender}</Text>
-              <Text color="green.100">{chat.message}</Text>
-            </Box>
-          ))}
-        </VStack>
-        {uploadedFile && (
-          <Box mb={4} p={2} bg="green.700" borderRadius="md">
-            <Text color="green.100">Uploaded: {uploadedFile}</Text>
-          </Box>
-        )}
-        <HStack>
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-            bg="green.900"
-            color="green.100"
-            borderColor="green.500"
-            _placeholder={{ color: "green.500" }}
-            _focus={{ borderColor: "green.300" }}
-          />
-          <IconButton
-            icon={<AttachmentIcon />}
-            onClick={() => fileInputRef.current.click()}
-            aria-label="Attach file"
-            bg="green.700"
-            color="black"
-            _hover={{ bg: "green.600" }}
-          />
-          <input
-            type="file"
-            ref={fileInputRef}
-            style={{ display: "none" }}
-            onChange={handleFileUpload}
-          />
-          <Button
-            onClick={handleSendMessage}
-            bg="green.700"
-            color="black"
-            _hover={{ bg: "green.600" }}
-          >
-            Send
-          </Button>
-        </HStack>
+              Send
+            </Button>
+          </HStack>
+        </Box>
       </Box>
     </ChakraProvider>
   );
 }
-
-
 
 export default App;
 
