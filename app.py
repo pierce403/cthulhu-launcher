@@ -40,12 +40,9 @@ db = SQLAlchemy(app)
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.String, unique=True, nullable=False)
-    important_notes = db.Column(db.Text)
-    preferences = db.Column(db.JSON)
     user_score = db.Column(db.Integer, default=0)
     user_notes = db.Column(db.Text)
-    updated_notes = db.Column(db.Text)
-
+    
 # Define Conversation model
 class Conversation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -94,11 +91,11 @@ def get_user(user_id):
 
     #return User.query.filter_by(user_id=user_id).first()
 
-def create_user(user_id, important_notes="", preferences=None):
+def create_user(user_id, important_notes=""):
     """
     Create a new user.
     """
-    user = User(user_id=user_id, important_notes=important_notes, preferences=preferences or {})
+    user = User(user_id=user_id, user_notes=important_notes)
     db.session.add(user)
     db.session.commit()
     return user
@@ -245,8 +242,8 @@ def chat():
         message = data.get('message')
         user_id = data.get('user_id')
         conversation_id = data.get('conversation_id')
-        user_notes = data.get('user_notes', '')
-        user_score = data.get('user_score', 0)
+        #user_notes = data.get('user_notes', '')
+        #user_score = data.get('user_score', 0)
 
         if not message or not isinstance(message, str):
             return jsonify({'message': 'Invalid or missing message. Please provide a non-empty string.'}), 400
@@ -254,19 +251,17 @@ def chat():
             return jsonify({'message': 'Invalid or missing user_id. Please provide a non-empty string.'}), 400
         if conversation_id and not isinstance(conversation_id, str):
             return jsonify({'message': 'Invalid conversation_id. Please provide a string or omit it.'}), 400
-        if not isinstance(user_score, int):
-            return jsonify({'message': 'Invalid user_score. Please provide an integer.'}), 400
-
+        
         # Get or create user data
         user = get_user(user_id)
         if not user:
-            user = create_user(user_id, user_notes, {})
+            user = create_user(user_id, "New user.")
             if not user:
                 return jsonify({'message': 'Failed to create user. Please try again later.'}), 500
 
         # Update user notes and score
-        user.important_notes = user_notes
-        user.user_score = user_score
+        #user.user_notes = user_notes
+        #user.user_score = user_score
         db.session.commit()
 
         # Prepare user context
@@ -290,7 +285,6 @@ def chat():
             return jsonify({'message': 'No response from assistant. Please try again later.'}), 500
 
         # Update user information
-        user.important_notes = updated_notes
         user.user_notes = updated_notes  # Update user_notes with the new information
 
         # Ensure updated_score is an integer and apply the change
@@ -313,10 +307,9 @@ def chat():
         return jsonify({
             'message': ai_reply,
             'conversation_id': new_conversation_id,
-            'updated_notes': updated_notes,
             'updated_score': user.user_score,
             'score_change': score_change,
-            'user_notes': user.important_notes
+            'user_notes': user.user_notes
         })
 
     except Exception as e:
@@ -329,7 +322,7 @@ def get_user(user_id):
     return User.query.filter_by(user_id=user_id).first()
 
 def prepare_user_context(user):
-    return f"User's name: {user.user_id} Important notes: {user.important_notes}\nPreferences: {user.preferences}"
+    return f"User's name: {user.user_id}\nUser score: {user.user_score}\nUser notes: {user.user_notes}"
 
 def get_conversation_context(conversation_id):
     previous_messages = Message.query.filter_by(conversation_id=conversation_id).order_by(Message.timestamp).all()

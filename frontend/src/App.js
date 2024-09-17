@@ -24,7 +24,6 @@ function App() {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [userScore, setUserScore] = useState(0);
   const [userNotes, setUserNotes] = useState("");
-  const [updatedNotes, setUpdatedNotes] = useState("");
   const fileInputRef = useRef(null);
   const chatContainerRef = useRef(null);
 
@@ -91,9 +90,7 @@ function App() {
         body: JSON.stringify({
           message: input,
           user_id: userId,
-          conversation_id: conversationId,
-          user_score: userScore,
-          user_notes: userNotes
+          conversation_id: conversationId
         }),
       });
       const data = await response.json();
@@ -113,9 +110,9 @@ function App() {
         console.log('Updating user score from', userScore, 'to', data.updated_score);
         setUserScore(data.updated_score);
       }
-      if (data.updated_notes !== undefined) {
-        console.log('Updating user notes:', data.updated_notes);
-        setUpdatedNotes(data.updated_notes);
+      if (data.user_notes !== undefined) {
+        console.log('Updating user notes:', data.uawe_notes);
+        setUserNotes(data.user_notes);
       }
 
       console.log('Final data after processing:', data);
@@ -220,9 +217,9 @@ function App() {
               </Box>
             </Flex>
           </Flex>
-          {updatedNotes && (
+          {userNotes && (
             <Box mb={4} p={2} bg="green.700" borderRadius="md">
-              <Text color="green.100">Updated Notes: {updatedNotes}</Text>
+              <Text color="green.100">Updated Notes: {userNotes}</Text>
             </Box>
           )}
           <VStack
