@@ -10,6 +10,7 @@ import {
   IconButton,
   Flex,
   Spacer,
+  Spinner,
 } from "@chakra-ui/react";
 import { AttachmentIcon } from "@chakra-ui/icons";
 import { customTheme } from "./theme";
@@ -26,10 +27,12 @@ function App() {
   const [userNotes, setUserNotes] = useState("");
   const fileInputRef = useRef(null);
   const chatContainerRef = useRef(null);
+  const [isWaiting, setIsWaiting] = useState(false);
 
   useEffect(() => {
     const storedUserId = localStorage.getItem("userId");
     const storedUserScore = localStorage.getItem("userScore");
+    const storedConversationId = localStorage.getItem("conversationId");
     console.log('Initial load - Stored User ID:', storedUserId);
     console.log('Initial load - Stored User Score:', storedUserScore);
     if (storedUserId) {
@@ -46,6 +49,9 @@ function App() {
       localStorage.setItem("userId", generatedName);
       console.log('Initial load - New user, setting ID:', generatedName);
     }
+    if (storedConversationId) {
+      setConversationId(storedConversationId);
+    }
   }, []);
 
   useEffect(() => {
@@ -61,18 +67,17 @@ function App() {
   }, [userId]);
 
   useEffect(() => {
-    if (!userId) {
-      const generatedName = generateEldritchName();
-      setUserId(generatedName);
-      setGeneratedName(generatedName);
-    }
-  }, [userId]);
-
-  useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatHistory]);
+
+  const startNewConversation = () => {
+    setConversationId(null);
+    setChatHistory([]);
+    localStorage.removeItem("conversationId");
+    console.log("Starting new conversation");
+  };
 
   const handleSendMessage = async () => {
     if (input.trim() === "" || !userId) return;
@@ -81,6 +86,7 @@ function App() {
 
     // Add user message to chat history
     setChatHistory((prev) => [...prev, { sender: "User", message: input }]);
+    setIsWaiting(true);  // Set waiting to true
 
     // Send message to backend API
     try {
@@ -100,8 +106,9 @@ function App() {
       setChatHistory((prev) => [...prev, { sender: "Cthulhu", message: data.message }]);
 
       // Update conversation_id if it's a new conversation
-      if (data.conversation_id && !conversationId) {
+      if (data.conversation_id && data.conversation_id !== conversationId) {
         setConversationId(data.conversation_id);
+        localStorage.setItem("conversation_id", data.conversation_id);
         console.log('Updated conversation_id:', data.conversation_id);
       }
 
@@ -111,7 +118,7 @@ function App() {
         setUserScore(data.updated_score);
       }
       if (data.user_notes !== undefined) {
-        console.log('Updating user notes:', data.uawe_notes);
+        console.log('Updating user notes:', data.user_notes);
         setUserNotes(data.user_notes);
       }
 
@@ -119,6 +126,8 @@ function App() {
     } catch (error) {
       console.error("Error sending message:", error);
       setChatHistory((prev) => [...prev, { sender: "System", message: "Error: Unable to send message" }]);
+    } finally {
+      setIsWaiting(false);  // Set waiting to false regardless of success or failure
     }
 
     setInput("");
@@ -210,11 +219,34 @@ function App() {
                 display="flex"
                 alignItems="center"
                 justifyContent="center"
+                mr={2}
               >
                 <Text color="green.100" fontWeight="bold" fontSize="lg">
                   Score: {userScore}
                 </Text>
               </Box>
+              <Box
+                bg="green.700"
+                p={2}
+                borderRadius="md"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                mr={2}
+              >
+                <Text color="green.100" fontSize="lg">
+                  Conv ID: {conversationId || 'N/A'}
+                </Text>
+              </Box>
+              <Button
+                onClick={startNewConversation}
+                bg="green.700"
+                color="green.100"
+                _hover={{ bg: "green.600" }}
+                size="sm"
+              >
+                New Conversation
+              </Button>
             </Flex>
           </Flex>
           {userNotes && (
@@ -248,6 +280,12 @@ function App() {
                 <Text color="green.100">{chat.message}</Text>
               </Box>
             ))}
+            {isWaiting && (
+              <Flex justify="flex-start" align="center" mt={2}>
+                <Spinner size="sm" color="green.500" mr={2} />
+                <Text color="green.500" fontSize="sm">Cthulhu is thinking...</Text>
+              </Flex>
+            )}
           </VStack>
           {uploadedFile && (
             <Box mb={4} p={2} bg="green.700" borderRadius="md">
