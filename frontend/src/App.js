@@ -67,6 +67,10 @@ function App() {
   }, [userId]);
 
   useEffect(() => {
+    console.log('User score changed:', userScore);
+  }, [userScore]);
+
+  useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
@@ -135,27 +139,58 @@ function App() {
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
+    console.log("File upload initiated. File:", file, "User ID:", userId);
     if (file && userId) {
+      console.log("Starting file upload for user:", userId);
       const formData = new FormData();
       formData.append('file', file);
       formData.append('user_id', userId);
 
       try {
+        console.log("Sending file upload request...");
         const response = await fetch('/upload', {
           method: 'POST',
           body: formData,
         });
         const data = await response.json();
+        console.log("File upload response received:", data);
         if (response.ok) {
           console.log("File uploaded successfully:", data.filename);
+          console.log("File ID received:", data.file_id);
           setUploadedFile(data.filename);
+
+          // Fetch the file score from the new endpoint
+          try {
+            console.log("Fetching file score for file ID:", data.file_id);
+            const scoreResponse = await fetch(`/get_file_score/${data.file_id}`);
+            const scoreData = await scoreResponse.json();
+            console.log("Score data received:", scoreData);
+            if (scoreResponse.ok) {
+              setUserScore(prevScore => {
+                console.log("Current user score before update:", prevScore);
+                const newScore = prevScore + scoreData.score;
+                console.log("Calculating new score:", prevScore, "+", scoreData.score, "=", newScore);
+                localStorage.setItem("userScore", newScore.toString());
+                console.log("Updated user score in localStorage:", newScore);
+                return newScore;
+              });
+              console.log("setUserScore called. New score should be applied.");
+            } else {
+              console.error("Failed to fetch file score:", scoreData.error);
+            }
+          } catch (scoreError) {
+            console.error("Error fetching file score:", scoreError);
+          }
         } else {
           console.error("File upload failed:", data.error);
         }
       } catch (error) {
         console.error("Error uploading file:", error);
       }
+    } else {
+      console.log("File upload aborted: No file selected or no user ID", { file, userId });
     }
+    console.log("File upload process completed. Current user score:", userScore);
   };
 
   return (

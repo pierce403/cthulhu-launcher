@@ -4,21 +4,43 @@ import os
 import uuid
 import json
 import time
+import logging
+from logging.handlers import RotatingFileHandler
 from openai import OpenAI
 from flask_sqlalchemy import SQLAlchemy
 from config import SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
+import io
+
+def setup_logging(app):
+    # Configure logging
+    log_formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]')
+
+    # File Handler
+    file_handler = RotatingFileHandler('app.log', maxBytes=10240, backupCount=10)
+    file_handler.setFormatter(log_formatter)
+    file_handler.setLevel(logging.DEBUG)
+
+    # Console Handler
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(log_formatter)
+    console_handler.setLevel(logging.INFO)
+
+    # Set up the app logger
+    app.logger.addHandler(file_handler)
+    app.logger.addHandler(console_handler)
+    app.logger.setLevel(logging.DEBUG)
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Initialize the Flask application
-#app = Flask(__name__)
-#app = Flask(__name__, static_folder='frontend/build')
 app = Flask(__name__, static_folder='web')
-#app = Flask(__name__, static_folder='static')
+
+# Set up logging
+setup_logging(app)
 
 # Configure the app with SQLAlchemy settings
 # Get the db URL from DATABASE_URL environment variable
@@ -69,6 +91,7 @@ class File(db.Model):
     mime_type = db.Column(db.String, nullable=False)
     file_size = db.Column(db.Integer, nullable=False)
     score = db.Column(db.Integer)
+    openai_file_id = db.Column(db.String, nullable=True)  # New field to store OpenAI file ID
 
 # Create all database tables
 with app.app_context():
@@ -242,8 +265,6 @@ def chat():
         message = data.get('message')
         user_id = data.get('user_id')
         conversation_id = data.get('conversation_id')
-        #user_notes = data.get('user_notes', '')
-        #user_score = data.get('user_score', 0)
 
         if not message or not isinstance(message, str):
             return jsonify({'message': 'Invalid or missing message. Please provide a non-empty string.'}), 400
@@ -251,7 +272,7 @@ def chat():
             return jsonify({'message': 'Invalid or missing user_id. Please provide a non-empty string.'}), 400
         if conversation_id and not isinstance(conversation_id, str):
             return jsonify({'message': 'Invalid conversation_id. Please provide a string or omit it.'}), 400
-        
+
         # Get or create user data
         user = get_user(user_id)
         if not user:
@@ -259,9 +280,6 @@ def chat():
             if not user:
                 return jsonify({'message': 'Failed to create user. Please try again later.'}), 500
 
-        # Update user notes and score
-        #user.user_notes = user_notes
-        #user.user_score = user_score
         db.session.commit()
 
         # Prepare user context
@@ -270,17 +288,21 @@ def chat():
         # Retrieve previous conversation context if conversation_id is provided
         conversation_context = get_conversation_context(conversation_id) if conversation_id else ""
 
+        # Get user's uploaded files
+        user_files = File.query.filter_by(user_id=user_id).all()
+        file_ids = [file.openai_file_id for file in user_files if file.openai_file_id]
+
         # Create or retrieve OpenAI thread
         thread = create_or_retrieve_thread(conversation_id)
         if not thread:
             return jsonify({'message': 'Failed to create or retrieve thread. Please try again later.'}), 500
 
         # Add message to OpenAI thread
-        if not add_message_to_thread(thread.id, user_context, conversation_context, message):
+        if not add_message_to_thread(thread.id, user_context, conversation_context, message, file_ids):
             return jsonify({'message': 'Failed to add message to thread. Please try again later.'}), 500
 
         # Run the assistant and get reply
-        ai_reply, updated_notes, updated_score = run_assistant(thread.id, user)
+        ai_reply, updated_notes, updated_score = run_assistant(thread.id, user, file_ids)
         if ai_reply is None:
             return jsonify({'message': 'No response from assistant. Please try again later.'}), 500
 
@@ -456,6 +478,32 @@ def serve(path):
     else:
         return send_from_directory(app.static_folder, 'index.html')
 
+# Create Tsathoth user route
+@app.route('/create_tsathoth', methods=['POST'])
+def create_tsathoth():
+    try:
+        user = get_user('Tsathoth')
+        if not user:
+            user = create_user('Tsathoth', "The Great Old One, Tsathoth.")
+            if not user:
+                return jsonify({'message': 'Failed to create Tsathoth user. Please try again later.'}), 500
+        return jsonify({'message': 'Tsathoth user created or already exists.'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Create Hasturogtha user route
+@app.route('/create_hasturogtha', methods=['POST'])
+def create_hasturogtha():
+    try:
+        user = get_user('Hasturogtha')
+        if not user:
+            user = create_user('Hasturogtha', "The Eldritch Horror, Hasturogtha.")
+            if not user:
+                return jsonify({'message': 'Failed to create Hasturogtha user. Please try again later.'}), 500
+        return jsonify({'message': 'Hasturogtha user created or already exists.'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Run the Flask application if this script is executed directly
 if __name__ == '__main__':
     # Start the Flask development server with debug mode enabled
@@ -476,10 +524,20 @@ def upload_file():
         if not user_id:
             return jsonify({'error': 'User ID is required'}), 400
 
+        openai_file = None
         try:
             file_content = file.read()
             mime_type = file.content_type
             file_size = len(file_content)
+
+            # Upload file to OpenAI API
+            openai_file = client.files.create(
+                file=io.BytesIO(file_content),
+                purpose='assistants'
+            )
+
+            # Calculate file score using OpenAI API
+            score = calculate_file_score(file_content)
 
             # Save file metadata and content to database
             new_file = File(
@@ -488,12 +546,68 @@ def upload_file():
                 file_content=file_content,
                 mime_type=mime_type,
                 file_size=file_size,
-                score=0,
+                score=score,
+                openai_file_id=openai_file.id
             )
             db.session.add(new_file)
             db.session.commit()
 
-            return jsonify({'message': 'File uploaded successfully', 'filename': filename}), 200
+            return jsonify({
+                'message': 'File uploaded successfully',
+                'filename': filename,
+                'openai_file_id': openai_file.id,
+                'score': score
+            }), 200
         except Exception as e:
             db.session.rollback()
+            if openai_file:
+                try:
+                    client.files.delete(openai_file.id)
+                except Exception as delete_error:
+                    app.logger.error(f"Error deleting OpenAI file: {str(delete_error)}")
             return jsonify({'error': str(e)}), 500
+
+import re  # Add this import at the top of the file
+
+def calculate_file_score(file_content):
+    try:
+        # Use OpenAI API to analyze file content
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are an AI assistant tasked with evaluating the relevance of a document to a 'dark agenda'. Score the document from 0 to 100, where 100 is extremely relevant. Respond with only the numeric score."},
+                {"role": "user", "content": f"Evaluate this document:\n\n{file_content.decode('utf-8', errors='ignore')}"}
+            ]
+        )
+
+        # Extract score from AI response using regex
+        ai_response = response.choices[0].message.content
+        app.logger.info(f"AI response: {ai_response}")
+        match = re.search(r'\d+', ai_response)
+        if match:
+            score = int(match.group())
+            final_score = max(0, min(score, 100))  # Ensure score is between 0 and 100
+            app.logger.info(f"Extracted score: {score}, Final score: {final_score}")
+            return final_score
+        else:
+            app.logger.warning(f"No numeric score found in AI response: {ai_response}")
+            return 0  # Default score if no number is found
+    except Exception as e:
+        app.logger.error(f"Error calculating file score: {str(e)}")
+        return 0  # Default score if calculation fails
+
+# New route to get file score
+@app.route('/get_file_score/<int:file_id>', methods=['GET'])
+def get_file_score(file_id):
+    app.logger.info(f"Fetching score for file_id: {file_id}")
+    try:
+        file = File.query.get(file_id)
+        app.logger.debug(f"Retrieved file object: {file}")
+        if file is None:
+            app.logger.warning(f"File not found for file_id: {file_id}")
+            return jsonify({'error': 'File not found'}), 404
+        app.logger.info(f"Sending score {file.score} for file_id: {file_id}")
+        return jsonify({'file_id': file_id, 'score': file.score}), 200
+    except Exception as e:
+        app.logger.error(f"Error fetching file score for file_id {file_id}: {str(e)}")
+        return jsonify({'error': 'An error occurred while fetching the file score'}), 500
