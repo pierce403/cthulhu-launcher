@@ -288,21 +288,17 @@ def chat():
         # Retrieve previous conversation context if conversation_id is provided
         conversation_context = get_conversation_context(conversation_id) if conversation_id else ""
 
-        # Get user's uploaded files
-        user_files = File.query.filter_by(user_id=user_id).all()
-        file_ids = [file.openai_file_id for file in user_files if file.openai_file_id]
-
         # Create or retrieve OpenAI thread
         thread = create_or_retrieve_thread(conversation_id)
         if not thread:
             return jsonify({'message': 'Failed to create or retrieve thread. Please try again later.'}), 500
 
         # Add message to OpenAI thread
-        if not add_message_to_thread(thread.id, user_context, conversation_context, message, file_ids):
+        if not add_message_to_thread(thread.id, user_context, conversation_context, message):
             return jsonify({'message': 'Failed to add message to thread. Please try again later.'}), 500
 
         # Run the assistant and get reply
-        ai_reply, updated_notes, updated_score = run_assistant(thread.id, user, file_ids)
+        ai_reply, updated_notes, updated_score = run_assistant(thread.id, user)
         if ai_reply is None:
             return jsonify({'message': 'No response from assistant. Please try again later.'}), 500
 
