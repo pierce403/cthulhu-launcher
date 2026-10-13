@@ -4,7 +4,8 @@ Build at the repository root with npm ci and npm run build. Native Cloudflare
 main builds publish with npx wrangler deploy --env "". Preview builds are disabled;
 Cloudflare holds deployment credentials. The prior Heroku commit
 e1dd5f0b2b9fd7be04a9aa70f3a2a6798e8b55ac and GitHub Pages remain recovery sources.
-The heroku-recovery directory retains the old CRA and Python installer metadata.
+The heroku-recovery directory retains the old CRA and Python installer metadata
+as .snapshot files. They are historical recovery documents, not active manifests.
 The root lockfile defines the active Vite/Worker build; Cloudflare no longer
 installs the unused legacy Python runtime during builds.
 
