@@ -57,5 +57,11 @@
         }
       ]
     }
-  }
+  },
+  "routes": [
+    {
+      "pattern": "cthulhu.bot/*",
+      "zone_name": "cthulhu.bot"
+    }
+  ]
 }
