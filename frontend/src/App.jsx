@@ -39,7 +39,7 @@ function App() {
   const [peerAddress, setPeerAddress] = useState(() => localStorage.getItem("xmtp_peer") || DEFAULT_PEER);
   const [xmtpEnv, setXmtpEnv] = useState(() => localStorage.getItem("xmtp_env") || "dev");
   const [burnerPrivateKey, setBurnerPrivateKey] = useState(() => localStorage.getItem("xmtp_burner_pk") || "");
-  const [wcProjectId, setWcProjectId] = useState(() => localStorage.getItem("wc_project_id") || process.env.REACT_APP_WALLETCONNECT_PROJECT_ID || "");
+  const [wcProjectId, setWcProjectId] = useState(() => localStorage.getItem("wc_project_id") || import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "");
 
   const logDebug = (message) => {
     const ts = new Date().toISOString().split("T")[1].replace("Z", "");

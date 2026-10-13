@@ -1,0 +1,61 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cthulhu-launcher",
+  "main": "worker/index.mjs",
+  "compatibility_date": "2026-10-13",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "frontend/dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "none"
+  },
+  "vars": {
+    "READ_ONLY": "true",
+    "STAGING": "false"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cthulhu-production",
+      "database_id": "592191b8-b86c-468e-bda1-a573966814fc",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "cthulhu-files-production"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "env": {
+    "staging": {
+      "name": "cthulhu-launcher-staging",
+      "routes": [],
+      "workers_dev": true,
+      "preview_urls": false,
+      "vars": {
+        "READ_ONLY": "false",
+        "STAGING": "true"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "cthulhu-staging",
+          "database_id": "ef7ea8f7-81b9-4582-ad65-e4bb7fe6931d",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "FILES",
+          "bucket_name": "cthulhu-files-staging"
+        }
+      ]
+    }
+  }
+}
