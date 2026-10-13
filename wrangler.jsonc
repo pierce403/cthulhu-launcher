@@ -12,7 +12,7 @@
     "not_found_handling": "none"
   },
   "vars": {
-    "READ_ONLY": "true",
+    "READ_ONLY": "false",
     "STAGING": "false"
   },
   "d1_databases": [

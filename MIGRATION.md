@@ -4,8 +4,9 @@ Build at the repository root with npm ci and npm run build. Native Cloudflare
 main builds publish with npx wrangler deploy --env "". Preview builds are disabled;
 Cloudflare holds deployment credentials. The prior Heroku commit
 e1dd5f0b2b9fd7be04a9aa70f3a2a6798e8b55ac and GitHub Pages remain recovery sources.
-The old frontend/package.json and lockfile describe the retained CRA recovery
-build; the root lockfile defines the active Vite/Worker build.
+The heroku-recovery directory retains the old CRA and Python installer metadata.
+The root lockfile defines the active Vite/Worker build; Cloudflare no longer
+installs the unused legacy Python runtime during builds.
 
 The React18/XMTP3.1.2 UI and local identity format remain. Ethers6 retains its
 EOA signer interface. XMTP protocol3.88 is pinned to remove a vulnerable Node
